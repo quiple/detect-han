@@ -1,5 +1,5 @@
 {
-  "name": "detect-han",
+  "name": "@quiple/detect-han",
   "version": "0.1.0",
   "description": "Detect region-exclusive Korean, Chinese, and Japanese Han characters from Unihan data",
   "type": "module",
@@ -8,6 +8,18 @@
   "module": "./dist/index.js",
   "browser": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/quiple/detect-han.git"
+  },
+  "bugs": {
+    "url": "https://github.com/quiple/detect-han/issues"
+  },
+  "homepage": "https://github.com/quiple/detect-han#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -27,6 +39,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run build",
+    "prepublishOnly": "npm run check",
     "update:unihan": "node scripts/update-unihan.mjs && npm run check"
   },
   "engines": {

@@ -5,7 +5,7 @@
 ## 설치
 
 ```sh
-npm install detect-han
+npm install @quiple/detect-han
 ```
 
 Node.js와 브라우저 번들러에서 같은 API를 사용할 수 있습니다. 런타임 의존성은 없습니다.
@@ -13,7 +13,7 @@ Node.js와 브라우저 번들러에서 같은 API를 사용할 수 있습니다
 ## 사용법
 
 ```ts
-import { detectHanUsage } from "detect-han";
+import { detectHanUsage } from "@quiple/detect-han";
 
 detectHanUsage("漢");
 // [] — 한국어·중국어·일본어에서 함께 쓰임
@@ -146,5 +146,15 @@ npm run typecheck
 npm run build
 npm run benchmark
 ```
+
+## npm 배포
+
+`@quiple/detect-han`은 공개 scoped 패키지로 설정되어 있습니다. npm 계정 인증 후 다음 명령으로 배포할 수 있습니다.
+
+```sh
+npm publish
+```
+
+배포 직전에 타입 검사, 테스트, ESM/CJS 빌드가 자동으로 실행되며 하나라도 실패하면 배포가 중단됩니다.
 
 패키지 코드는 MIT 라이선스이며, 생성된 Unihan 파생 데이터에는 [Unicode License v3](https://www.unicode.org/license.txt)가 적용됩니다. 자세한 고지는 [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md)에 있습니다.
