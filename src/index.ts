@@ -1,6 +1,8 @@
 import {
   ENCODED_DATA,
+  GAP_BYTE_LENGTH,
   MAX_CODE_POINT,
+  MASKS_BY_FREQUENCY,
   MIN_CODE_POINT,
   RECORD_COUNT,
 } from "./generated/unihan-core.js";
@@ -61,29 +63,47 @@ const REGION_CODES = [
 
 let records: Uint32Array | undefined;
 
-// Data is decoded only after the first potentially relevant Han character is seen.
+function createBitReader(bytes: string, byteOffset = 0): () => number {
+  let bitIndex = byteOffset * 8;
+
+  return () => {
+    const bit = (bytes.charCodeAt(bitIndex >>> 3) >>> (7 - (bitIndex & 7))) & 1;
+    bitIndex += 1;
+    return bit;
+  };
+}
+
+// The two compact bitstreams are decoded only after the first relevant Han candidate.
 function getRecords(): Uint32Array {
   if (records) return records;
 
   const bytes = atob(ENCODED_DATA);
   const decoded = new Uint32Array(RECORD_COUNT);
-  let byteIndex = 0;
   let codePoint = 0;
+  const readGapBit = createBitReader(bytes);
 
   for (let recordIndex = 0; recordIndex < decoded.length; recordIndex += 1) {
-    let value = 0;
-    let shift = 0;
-    let byte: number;
+    let gap = 1;
+    if (readGapBit() === 1) {
+      let leadingZeros = 0;
+      while (readGapBit() === 0) leadingZeros += 1;
 
-    do {
-      byte = bytes.charCodeAt(byteIndex);
-      byteIndex += 1;
-      value += (byte & 0x7f) * 2 ** shift;
-      shift += 7;
-    } while (byte & 0x80);
+      let value = 1;
+      for (let index = 0; index < leadingZeros; index += 1) {
+        value = value * 2 + readGapBit();
+      }
+      gap = value + 1;
+    }
 
-    codePoint += Math.floor(value / 128);
-    decoded[recordIndex] = codePoint * 128 + (value & REGION_MASK);
+    codePoint += gap;
+    decoded[recordIndex] = codePoint * 128;
+  }
+
+  const readMaskBit = createBitReader(bytes, GAP_BYTE_LENGTH);
+  for (let recordIndex = 0; recordIndex < decoded.length; recordIndex += 1) {
+    let maskRank = 0;
+    while (readMaskBit() === 1) maskRank += 1;
+    decoded[recordIndex]! |= MASKS_BY_FREQUENCY[maskRank]!;
   }
 
   records = decoded;
