@@ -15,19 +15,19 @@ Node.js와 브라우저 번들러에서 같은 API를 사용할 수 있습니다
 ```ts
 import { detectHanUsage } from "@quiple/detect-han";
 
-detectHanUsage("漢");
-// [] — 한국어·중국어·일본어에서 함께 쓰임
+detectHanUsage("漢字");
+// [] — 두 글자 모두 여러 언어에서 함께 쓰임
 
-detectHanUsage("期間曾經存在過的一個官職");
-// [] — 문장의 언어와 관계없이, 각 한자가 여러 언어에서 쓰임
+detectHanUsage("简体中文");
+// ["zh"] — 简은 중국어에서만 쓰임
 
-detectHanUsage("期間456曾經ㅋㅋㅋ 一個 AND 官職");
-// []
+detectHanUsage("日本の桜");
+// ["ja"] — 桜은 일본어에서만 쓰임
 
-detectHanUsage("亐漢亜");
-// ["ko", "ja"] — 亐는 한국어 전용, 亜는 일본어 전용, 漢은 제외
+detectHanUsage("한국의 硏究");
+// ["ko"] — 硏은 한국어에서만 쓰임
 
-detectHanUsage("㑇亜亐");
+detectHanUsage("简体中文、日本の桜、한국의 硏究");
 // ["zh", "ja", "ko"]
 ```
 
@@ -38,7 +38,9 @@ detectHanUsage("㑇亜亐");
 기본값은 ISO 639-1입니다. `standard`를 지정하면 ISO 639-3 코드로 받을 수 있습니다.
 
 ```ts
-detectHanUsage("㑇亜亐", { standard: "iso639-3" });
+detectHanUsage("简体中文、日本の桜、한국의 硏究", {
+  standard: "iso639-3",
+});
 // ["zho", "jpn", "kor"]
 ```
 
@@ -47,17 +49,20 @@ detectHanUsage("㑇亜亐", { standard: "iso639-3" });
 `includeRegion: true`이면 값이 정확히 한 지역에만 속한 한자만 반환합니다.
 
 ```ts
-detectHanUsage("㑇㐵䲳亜亐堗", { includeRegion: true });
-// ["zh-CN", "zh-HK", "zh-TW", "ja-JP", "ko-KR", "ko-KP"]
+detectHanUsage("简体中文、日本の桜", { includeRegion: true });
+// ["zh-CN", "ja-JP"]
 
-detectHanUsage("㑊乫", { includeRegion: true });
-// [] — 㑊은 G·H, 乫은 K·P에 속하므로 지역 전용이 아님
+detectHanUsage("汉", { includeRegion: true });
+// [] — 汉은 G·H에 속하므로 특정 지역 전용이 아님
 
-detectHanUsage("㑇亜亐", {
+detectHanUsage("한국의 硏究", { includeRegion: true });
+// [] — 硏은 K·P에 속하므로 특정 지역 전용이 아님
+
+detectHanUsage("简体中文、日本の桜", {
   standard: "iso639-3",
   includeRegion: true,
 });
-// ["zho-CN", "jpn-JP", "kor-KR"]
+// ["zho-CN", "jpn-JP"]
 ```
 
 | Unihan 값 | 지역 | ISO 639-1 | 지역 포함 | ISO 639-3 지역 포함 |
