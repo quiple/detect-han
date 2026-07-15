@@ -29,6 +29,13 @@ function isLanguageExclusive(mask) {
   );
 }
 
+function normalizeMask(mask) {
+  if ((mask & (mask - 1)) === 0) return mask;
+  if ((mask & ZH_MASK) === mask) return ZH_MASK;
+  if ((mask & KO_MASK) === mask) return KO_MASK;
+  return mask;
+}
+
 function createBitWriter() {
   const bytes = [];
   let byte = 0;
@@ -71,6 +78,9 @@ function generateSource(records, version, date) {
   const masksByFrequency = [...maskCounts]
     .sort((left, right) => right[1] - left[1] || left[0] - right[0])
     .map(([mask]) => mask);
+  if (masksByFrequency.length > 15) {
+    throw new Error("The normalized region masks no longer fit in four bits");
+  }
   const maskRanks = new Map(masksByFrequency.map((mask, rank) => [mask, rank]));
 
   const gapWriter = createBitWriter();
@@ -106,7 +116,12 @@ function generateSource(records, version, date) {
     `export const MAX_CODE_POINT = 0x${records.at(-1)[0].toString(16)};\n` +
     `export const GAP_BYTE_LENGTH = ${gapBytes.length};\n` +
     `export const MASKS_BY_FREQUENCY = ${JSON.stringify(masksByFrequency)};\n` +
-    `export const ENCODED_DATA =\n${wrapBase64(encoded)};\n`;
+    `let encodedData =\n${wrapBase64(encoded)};\n` +
+    `export function takeEncodedData() {\n` +
+    `  const data = encodedData;\n` +
+    `  encodedData = "";\n` +
+    `  return data;\n` +
+    `}\n`;
 }
 
 const fileArgumentIndex = process.argv.indexOf("--file");
@@ -153,7 +168,10 @@ for (const [name, contents] of Object.entries(archive)) {
     }
     seenCodePoints.add(codePoint);
     totalRecordCount += 1;
-    if (isLanguageExclusive(mask)) recordsByCodePoint.set(codePoint, mask);
+    if (isLanguageExclusive(mask)) {
+      // Exact multi-region combinations do not affect language or region exclusivity.
+      recordsByCodePoint.set(codePoint, normalizeMask(mask));
+    }
   }
 }
 

@@ -1,10 +1,10 @@
 import {
-  ENCODED_DATA,
   GAP_BYTE_LENGTH,
   MAX_CODE_POINT,
   MASKS_BY_FREQUENCY,
   MIN_CODE_POINT,
   RECORD_COUNT,
+  takeEncodedData,
 } from "./generated/unihan-core.js";
 
 export { UNIHAN_DATE, UNIHAN_VERSION } from "./generated/unihan-core.js";
@@ -50,6 +50,11 @@ export type DetectHanResult<
 
 const REGION_MASK = 0x7f;
 const JAPAN_MASK = 1 << 4;
+const CJK_START = 0x3400;
+const CJK_END = 0x9fff;
+const COMPATIBILITY_START = 0xf900;
+const COMPATIBILITY_END = 0xfaff;
+const ASTRAL_START = 0x20000;
 
 const LANGUAGE_CODES = [
   ["zh", "ja", "ko"],
@@ -61,7 +66,9 @@ const REGION_CODES = [
   ["zho-CN", "zho-HK", "zho-MO", "zho-TW", "jpn-JP", "kor-KR", "kor-KP"],
 ] as const;
 
-let records: Uint32Array | undefined;
+type LookupTables = readonly [Uint8Array, Uint8Array, Uint8Array];
+
+let lookupTables: LookupTables | undefined;
 
 function createBitReader(bytes: string, byteOffset = 0): () => number {
   let bitIndex = byteOffset * 8;
@@ -73,16 +80,21 @@ function createBitReader(bytes: string, byteOffset = 0): () => number {
   };
 }
 
-// The two compact bitstreams are decoded only after the first relevant Han candidate.
-function getRecords(): Uint32Array {
-  if (records) return records;
+// Each byte stores two four-bit class IDs for constant-time lookup.
+function getLookupTables(): LookupTables {
+  if (lookupTables) return lookupTables;
 
-  const bytes = atob(ENCODED_DATA);
-  const decoded = new Uint32Array(RECORD_COUNT);
+  const bytes = atob(takeEncodedData());
+  const cjk = new Uint8Array((CJK_END - CJK_START + 1) >>> 1);
+  const compatibility = new Uint8Array(
+    (COMPATIBILITY_END - COMPATIBILITY_START + 1) >>> 1,
+  );
+  const astral = new Uint8Array(Math.ceil((MAX_CODE_POINT - ASTRAL_START + 1) / 2));
   let codePoint = 0;
   const readGapBit = createBitReader(bytes);
+  const readMaskBit = createBitReader(bytes, GAP_BYTE_LENGTH);
 
-  for (let recordIndex = 0; recordIndex < decoded.length; recordIndex += 1) {
+  for (let recordIndex = 0; recordIndex < RECORD_COUNT; recordIndex += 1) {
     let gap = 1;
     if (readGapBit() === 1) {
       let leadingZeros = 0;
@@ -96,45 +108,55 @@ function getRecords(): Uint32Array {
     }
 
     codePoint += gap;
-    decoded[recordIndex] = codePoint * 128;
-  }
-
-  const readMaskBit = createBitReader(bytes, GAP_BYTE_LENGTH);
-  for (let recordIndex = 0; recordIndex < decoded.length; recordIndex += 1) {
     let maskRank = 0;
     while (readMaskBit() === 1) maskRank += 1;
-    decoded[recordIndex]! |= MASKS_BY_FREQUENCY[maskRank]!;
+
+    let table: Uint8Array;
+    let offset: number;
+    if (codePoint <= CJK_END) {
+      table = cjk;
+      offset = codePoint - CJK_START;
+    } else if (codePoint <= COMPATIBILITY_END) {
+      table = compatibility;
+      offset = codePoint - COMPATIBILITY_START;
+    } else {
+      table = astral;
+      offset = codePoint - ASTRAL_START;
+    }
+    table[offset >>> 1]! |= (maskRank + 1) << ((offset & 1) * 4);
   }
 
-  records = decoded;
-  return decoded;
+  lookupTables = [cjk, compatibility, astral];
+  return lookupTables;
 }
 
 function findRegionMask(codePoint: number): number {
-  const data = getRecords();
-  let low = 0;
-  let high = data.length - 1;
+  const tables = getLookupTables();
+  let table: Uint8Array;
+  let offset: number;
 
-  while (low <= high) {
-    const middle = (low + high) >>> 1;
-    const record = data[middle]!;
-    const candidate = Math.floor(record / 128);
-
-    if (candidate < codePoint) low = middle + 1;
-    else if (candidate > codePoint) high = middle - 1;
-    else return record & REGION_MASK;
+  if (codePoint <= CJK_END) {
+    table = tables[0];
+    offset = codePoint - CJK_START;
+  } else if (codePoint <= COMPATIBILITY_END) {
+    table = tables[1];
+    offset = codePoint - COMPATIBILITY_START;
+  } else {
+    table = tables[2];
+    offset = codePoint - ASTRAL_START;
   }
 
-  return 0;
+  const maskRank = ((table[offset >>> 1]! >>> ((offset & 1) * 4)) & 0xf) - 1;
+  return maskRank < 0 ? 0 : MASKS_BY_FREQUENCY[maskRank]!;
 }
 
 function isPotentialHan(codePoint: number): boolean {
   if (codePoint < MIN_CODE_POINT || codePoint > MAX_CODE_POINT) return false;
 
   return (
-    (codePoint >= 0x3400 && codePoint <= 0x9fff) ||
-    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-    codePoint >= 0x20000
+    (codePoint >= CJK_START && codePoint <= CJK_END) ||
+    (codePoint >= COMPATIBILITY_START && codePoint <= COMPATIBILITY_END) ||
+    codePoint >= ASTRAL_START
   );
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "@quiple/detect-han",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Detect region-exclusive Korean, Chinese, and Japanese Han characters from Unihan data",
   "type": "module",
   "sideEffects": false,
